@@ -1,0 +1,14 @@
+[package]
+name = "rust_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+rusqlite = { version = "0.30", features = ["bundled"] }
+log = "0.4"
+env_logger = "0.11"
+once_cell = "1.19"

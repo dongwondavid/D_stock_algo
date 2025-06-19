@@ -1,0 +1,5 @@
+.vscode
+
+.cursorignore
+
+rust_core/target
