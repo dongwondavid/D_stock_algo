@@ -83,14 +83,27 @@ impl Default for StockInfoManager {
 
 pub static STOCK_INFO_MANAGER: Lazy<Mutex<StockInfoManager>> = Lazy::new(|| {
     let mut manager = StockInfoManager::new();
-    // 현재 실행 디렉토리 기준으로 상대 경로 수정
-    let csv_path = if std::path::Path::new("data/sector_utf8.csv").exists() {
-        "data/sector_utf8.csv"
-    } else if std::path::Path::new("rust_core/data/sector_utf8.csv").exists() {
-        "rust_core/data/sector_utf8.csv"
-    } else {
-        panic!("sector_utf8.csv 파일을 찾을 수 없습니다. data/ 또는 rust_core/data/ 디렉토리를 확인해주세요.");
-    };
-    manager.load_from_csv(csv_path).expect("업종 CSV 로드 실패");
+    
+    // 여러 가능한 경로를 순차적으로 시도
+    let possible_paths = [
+        "rust_core/data/sector_utf8.csv",
+        "data/sector_utf8.csv", 
+        "../rust_core/data/sector_utf8.csv",
+        "../../rust_core/data/sector_utf8.csv",
+    ];
+    
+    let mut csv_path = None;
+    for path_str in &possible_paths {
+        if std::path::Path::new(path_str).exists() {
+            csv_path = Some(path_str.to_string());
+            break;
+        }
+    }
+    
+    let csv_path = csv_path.unwrap_or_else(|| {
+        panic!("sector_utf8.csv 파일을 찾을 수 없습니다. 다음 경로들을 확인해주세요: {:?}", possible_paths);
+    });
+    
+    manager.load_from_csv(&csv_path).expect("업종 CSV 로드 실패");
     Mutex::new(manager)
 }); 

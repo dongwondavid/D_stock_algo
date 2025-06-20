@@ -10,7 +10,7 @@ def generate_date_list(days=90):
 
 # D0 종목 수집 및 업종 분석
 def analyze_industry_overlaps(date_list):
-    industry_overlap_counter = Counter()
+    industry_counter = Counter()
     industry_date_map = defaultdict(set)
 
     for date in date_list:
@@ -19,30 +19,29 @@ def analyze_industry_overlaps(date_list):
             if not results:
                 continue  # D0 종목이 없는 날짜는 제외
 
-            industry_counts = Counter([industry for _, _, industry in results])
-            for industry, count in industry_counts.items():
-                if count >= 2:
-                    industry_overlap_counter[industry] += 1
-                    industry_date_map[industry].add(date)
+            # 이제 최대 1개 종목만 반환되므로 단순히 업종 카운트
+            for _, _, industry in results:
+                industry_counter[industry] += 1
+                industry_date_map[industry].add(date)
 
         except Exception as e:
             print(f"⚠️ {date} 처리 실패: {e}")
 
-    return industry_overlap_counter, industry_date_map
+    return industry_counter, industry_date_map
 
 # 실행 예시
 if __name__ == "__main__":
     date_list = generate_date_list(90)
 
     logging.info(f"date_list 완성")
-    overlap_counts, overlap_dates = analyze_industry_overlaps(date_list)
+    industry_counts, industry_dates = analyze_industry_overlaps(date_list)
 
-    logging.info(f"overlap_counts 완성")
+    logging.info(f"industry_counts 완성")
 
-    print("\n📌 하루에 2개 이상 겹친 업종 빈도 (최근 3개월 기준):")
-    for industry, count in overlap_counts.most_common():
+    print("\n📌 업종별 선정 빈도 (최근 3개월 기준):")
+    for industry, count in industry_counts.most_common():
         print(f"- {industry}: {count}일")
 
-    print("\n🗓️ 업종별 겹친 날짜 샘플:")
-    for industry, dates in overlap_dates.items():
+    print("\n🗓️ 업종별 선정된 날짜 샘플:")
+    for industry, dates in industry_dates.items():
         print(f"- {industry} ({len(dates)}일): {sorted(dates)[:5]} ...")
