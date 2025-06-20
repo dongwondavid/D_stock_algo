@@ -9,19 +9,19 @@ pub struct D0Stock {
     pub sector: String,
 }
 
-pub fn evaluate_d0_logic(date: &str) -> Result<Vec<D0Stock>, Box<dyn std::error::Error>> {
+pub fn evaluate_d0_logic(date: &str, to: &str) -> Result<Vec<D0Stock>, Box<dyn std::error::Error>> {
     init_logger();
-    info!("🚀 D0 종목 분석 시작: {}", date);
+    info!("🚀 D0 종목 분석 시작: {} (09:00 ~ {})", date, to);
     let conn = db::open("D:/db/stock_price(5min).db")?;
     let tables = db::get_all_tables(&conn)?;
     info!("📊 전체 종목 수: {}개", tables.len());
     // 5분봉 DB는 date가 INT(예: 202003300905)임에 유의
     // 입력 date(YYYY-MM-DD) → 20240101 등으로 변환 필요
     let date_num = date.replace("-", "");
-    let from = format!("{}0900", date_num); // 09:00
-    let to = format!("{}0930", date_num);   // 09:30
+    let from = format!("{}0900", date_num); // 09:00 (고정)
+    let to_time = format!("{}{}", date_num, to);   // 종료 시간은 파라미터로 받음
     
-    info!("⏰ 분석 시간 범위: {} ~ {} (INT 형식)", from, to);
+    info!("⏰ 분석 시간 범위: {} ~ {} (INT 형식)", from, to_time);
     
     let mut scored = vec![];
     let mut success_count = 0;
@@ -30,7 +30,7 @@ pub fn evaluate_d0_logic(date: &str) -> Result<Vec<D0Stock>, Box<dyn std::error:
     
     for t in &tables {
         // 5분봉 DB는 date가 INT이므로 쿼리도 INT로
-        match volume::trade_value_between(&conn, t, &from, &to) {
+        match volume::trade_value_between(&conn, t, &from, &to_time) {
             Ok(sum) => {
                 if sum > 0 {
                     scored.push((t.clone(), sum));
@@ -55,7 +55,16 @@ pub fn evaluate_d0_logic(date: &str) -> Result<Vec<D0Stock>, Box<dyn std::error:
     info!("🏆 상위 30개 종목 선정 완료");
     let d0_codes: Vec<String> = top30
         .into_iter()
-        .filter(|code| price::is_d0(&conn, code, &from, &to).unwrap_or(false))
+        .filter(|code| {
+            let is_d0_result = price::is_d0(&conn, code, &from, &to_time);
+            match is_d0_result {
+                Ok(is_d0) => is_d0,
+                Err(e) => {
+                    info!("⚠️ {} D0 조건 확인 중 오류: {}", code, e);
+                    false
+                }
+            }
+        })
         .collect();
     info!("✅ D0 조건 만족 종목: {}개", d0_codes.len());
     
@@ -100,7 +109,7 @@ mod tests {
         }
         
         println!("✅ DB 연결 성공, evaluate_d0_logic 실행");
-        let result = evaluate_d0_logic("2025-04-30");
+        let result = evaluate_d0_logic("2025-04-30", "0930");
         assert!(result.is_ok(), "evaluate_d0_logic 실행 실패: {:?}", result.err());
         
         let d0s = result.unwrap();
