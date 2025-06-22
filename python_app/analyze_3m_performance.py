@@ -11,6 +11,26 @@ logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s -
 
 os.environ["RUST_LOG"] = "warn"
 
+# 수수료 기준 (승률 계산용)
+COMMISSION_RATE = 0.249
+
+def calculate_win_rate(rates: List[float]) -> float:
+    """수수료 0.249% 이상의 수익률을 보여준 비율을 계산합니다."""
+    if not rates:
+        return 0.0
+    winning_trades = sum(1 for rate in rates if rate > COMMISSION_RATE)
+    return (winning_trades / len(rates)) * 100
+
+def plus_30_minutes(time: str) -> str:
+    """30분을 더한 시간을 반환합니다."""
+    hour = int(time[:2])
+    minute = int(time[2:])
+
+    if minute ==30:
+        return f"{hour+1:02d}00"
+    else:
+        return f"{hour:02d}30"
+
 def generate_time_intervals() -> List[str]:
     """하루 중 30분 간격의 시간대를 생성합니다."""
     intervals = []
@@ -25,7 +45,7 @@ def generate_time_intervals() -> List[str]:
 
 def generate_date_list(days: int = 90) -> List[str]:
     """최근 N일간의 날짜 리스트를 생성합니다."""
-    today = datetime.strptime("2025-04-30", "%Y-%m-%d")
+    today = datetime.strptime("2025-01-30", "%Y-%m-%d")
     return [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
 
 def format_time(seconds: float) -> str:
@@ -72,7 +92,7 @@ def print_progress(current: int, total: int, start_time: float, current_time: fl
               end='', flush=True)
 
 def analyze_3m_performance() -> Dict:
-    """3달 동안 30분 간격으로 대장주 선별 및 상승률 분석"""
+    """3달 동안 30분 간격으로 업종별 최고 종목 선별 및 상승률 분석"""
     
     # 날짜와 시간대 설정
     date_list = generate_date_list(90)
@@ -107,7 +127,8 @@ def analyze_3m_performance() -> Dict:
             'rates': [],
             'stocks': [],
             'errors': 0,
-            'no_data': 0
+            'no_data': 0,
+            'win_rate': 0.0
         }
         results['data_unavailable_intervals'][interval] = []
     
@@ -130,16 +151,19 @@ def analyze_3m_performance() -> Dict:
             results['total_attempts'] += 1
             
             try:
-                # 해당 시간대까지의 대장주 선별
+                # 해당 시간대까지의 업종별 최고 종목 선별
                 selected_stocks = rust_core.evaluate_d_for_date_and_time(date, interval)
                 
                 if selected_stocks:
+
+                    best_stock = selected_stocks[0]
+
                     results['successful_selections'] += 1
                     results['interval_stats'][interval]['count'] += 1
                     success_count += 1
                     
                     # 선별된 종목 정보 저장
-                    for code, name, sector in selected_stocks:
+                    for code, name, sector in [best_stock]:
                         stock_info = {
                             'date': date,
                             'time': interval,
@@ -152,9 +176,10 @@ def analyze_3m_performance() -> Dict:
                         daily_stocks.append(stock_info)
                     
                     # 실제 상승률 계산 (30분 간격)
-                    for code, name, sector in selected_stocks:
+                    for code, name, sector in [best_stock]:
                         try:
-                            increase_rate = rust_core.calculate_30min_increase_rate(code, date, interval)
+                            interval_30 = plus_30_minutes(interval)
+                            increase_rate = rust_core.calculate_30min_increase_rate(code, date, interval_30)
                             
                             results['increase_rates'].append(increase_rate)
                             results['interval_stats'][interval]['rates'].append(increase_rate)
@@ -196,6 +221,7 @@ def analyze_3m_performance() -> Dict:
                 'avg_rate': statistics.mean(daily_rates),
                 'max_rate': max(daily_rates),
                 'min_rate': min(daily_rates),
+                'win_rate': calculate_win_rate(daily_rates),
                 'stocks': daily_stocks,
                 'errors': daily_errors,
                 'no_data': daily_no_data
@@ -208,6 +234,7 @@ def analyze_3m_performance() -> Dict:
                 'avg_rate': 0.0,
                 'max_rate': 0.0,
                 'min_rate': 0.0,
+                'win_rate': 0.0,
                 'stocks': [],
                 'errors': daily_errors,
                 'no_data': daily_no_data
@@ -218,6 +245,11 @@ def analyze_3m_performance() -> Dict:
                   success_count, error_count, no_data_count)
     print()  # 줄바꿈
     
+    # 각 시간대별 승률 계산
+    for interval in time_intervals:
+        if results['interval_stats'][interval]['rates']:
+            results['interval_stats'][interval]['win_rate'] = calculate_win_rate(results['interval_stats'][interval]['rates'])
+    
     # 전체 통계 계산
     if results['increase_rates']:
         results['overall_stats'] = {
@@ -225,7 +257,8 @@ def analyze_3m_performance() -> Dict:
             'median_rate': statistics.median(results['increase_rates']),
             'max_rate': max(results['increase_rates']),
             'min_rate': min(results['increase_rates']),
-            'std_dev': statistics.stdev(results['increase_rates']) if len(results['increase_rates']) > 1 else 0
+            'std_dev': statistics.stdev(results['increase_rates']) if len(results['increase_rates']) > 1 else 0,
+            'win_rate': calculate_win_rate(results['increase_rates'])
         }
     
     # 실행 시간 정보 추가
@@ -243,7 +276,7 @@ def print_analysis_results(results: Dict):
     """분석 결과를 출력합니다."""
     
     print("\n" + "="*60)
-    print("📊 3개월 대장주 선별 및 상승률 분석 결과")
+    print("📊 3개월 업종별 최고 종목 선별 및 상승률 분석 결과")
     print("="*60)
     
     # 실행 정보
@@ -275,6 +308,7 @@ def print_analysis_results(results: Dict):
         print(f"  - 최고 상승률: {stats['max_rate']:.2f}%")
         print(f"  - 최저 상승률: {stats['min_rate']:.2f}%")
         print(f"  - 표준편차: {stats['std_dev']:.2f}%")
+        print(f"  - 승률 (수수료 {COMMISSION_RATE}% 이상): {stats['win_rate']:.1f}%")
     
     # 시간대별 통계
     print(f"\n⏰ 시간대별 통계:")
@@ -291,7 +325,7 @@ def print_analysis_results(results: Dict):
             
             if stats['rates']:
                 avg_rate = statistics.mean(stats['rates'])
-                print(f"    평균 상승률: {avg_rate:.2f}%")
+                print(f"    평균 상승률: {avg_rate:.2f}%, 승률: {stats['win_rate']:.1f}%")
     
     # 상위 성과 시간대
     print(f"\n🏆 상위 성과 시간대 (선별 횟수 기준):")
@@ -303,7 +337,7 @@ def print_analysis_results(results: Dict):
     for i, (interval, stats) in enumerate(sorted_intervals[:5], 1):
         if stats['count'] > 0:
             avg_rate = statistics.mean(stats['rates'])
-            print(f"  {i}. {interval}: {stats['count']}회, 평균 {avg_rate:.2f}%")
+            print(f"  {i}. {interval}: {stats['count']}회, 평균 {avg_rate:.2f}%, 승률 {stats['win_rate']:.1f}%")
     
     # 에러 분석
     if results['error_details']:

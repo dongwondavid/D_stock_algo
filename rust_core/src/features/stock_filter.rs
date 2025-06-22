@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use log::{info, debug};
 use std::collections::HashMap;
-use crate::core::d_logic::DStock;
+use crate::core::d_logic::{DStock, evaluate_d_logic_before};
 
 /// 업종별로 그룹화하여 3개 이상인 업종명을 찾는 함수
 pub fn find_sectors_with_3_or_more(ds: &[DStock]) -> Vec<String> {
@@ -66,8 +66,15 @@ pub fn select_best_stock_by_increase_rate(
     date_num: &str,
     to: &str
 ) -> Result<Vec<DStock>, Box<dyn std::error::Error>> {
-    // 1단계: 업종명이 3개 이상인 업종명을 찾기
-    let sectors_with_3_or_more = find_sectors_with_3_or_more(&ds);
+
+    // 0단계: 이전 시간대의 D알고리즘으로 선별된 업종명 모으기
+    let ds_before = evaluate_d_logic_before(&format!("{}-{}-{}", 
+        &date_num[0..4], &date_num[4..6], &date_num[6..8]), to)?;
+    
+    debug!("📊 이전 시간대 수집된 종목: {}개", ds_before.len());
+
+    // 1단계: 업종명이 3개 이상인 업종명을 찾기 (이전 데이터 포함)
+    let sectors_with_3_or_more = find_sectors_with_3_or_more(&ds_before);
     debug!("📋 3개 이상 업종명: {:?}", sectors_with_3_or_more);
     
     if sectors_with_3_or_more.is_empty() {
@@ -88,17 +95,20 @@ pub fn select_best_stock_by_increase_rate(
         return Ok(vec![]);
     }
     
-    // 3단계: 9:00~to 구간 상승률이 가장 높은 종목 찾기 (D 조건과 일관성 유지)
-    let mut best_stock: Option<DStock> = None;
-    let mut best_rate = f64::NEG_INFINITY;
+    // 3단계: 각 업종별로 상승률이 가장 높은 종목 찾기
+    let mut sector_best_stocks: HashMap<String, (DStock, f64)> = HashMap::new();
     
     for stock in &ds_selected {
         match calculate_d_period_increase_rate(conn, &stock.code, date_num, to) {
             Ok(rate) => {
                 debug!("📈 {} ({}): 9:00~{} 상승률 {:.2}%", stock.name, stock.code, to, rate);
-                if rate > best_rate {
-                    best_rate = rate;
-                    best_stock = Some(stock.clone());
+                
+                let entry = sector_best_stocks.entry(stock.sector.clone()).or_insert_with(|| {
+                    (stock.clone(), f64::NEG_INFINITY)
+                });
+                
+                if rate > entry.1 {
+                    *entry = (stock.clone(), rate);
                 }
             },
             Err(e) => {
@@ -107,11 +117,27 @@ pub fn select_best_stock_by_increase_rate(
         }
     }
     
-    if let Some(best) = best_stock {
-        info!("🏆 최종 선정 종목: {} ({}), 상승률: {:.2}%", best.name, best.code, best_rate);
-        Ok(vec![best])
-    } else {
-        info!("⚠️ 상승률 계산 중 오류가 발생했습니다.");
-        Ok(vec![])
+    // 4단계: 각 업종의 최고 종목들을 상승률이 높은 순서대로 정렬된 결과 벡터로 변환
+    let mut result: Vec<DStock> = Vec::new();
+    
+    // HashMap을 벡터로 변환하고 상승률 기준으로 정렬
+    let mut sorted_stocks: Vec<(String, DStock, f64)> = sector_best_stocks
+        .into_iter()
+        .map(|(sector, (stock, rate))| (sector, stock, rate))
+        .collect();
+    
+    // 상승률 기준으로 내림차순 정렬
+    sorted_stocks.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    
+    for (sector, stock, rate) in sorted_stocks {
+        info!("🏆 {} 업종 최고 종목: {} ({}), 상승률: {:.2}%", 
+              sector, stock.name, stock.code, rate);
+        result.push(stock);
     }
-} 
+    
+    info!("✅ 최종 선정 종목: {}개 업종에서 {}개 종목 선정 (상승률 순)", 
+          sectors_with_3_or_more.len(), result.len());
+    
+    
+    Ok(result)
+}

@@ -35,7 +35,7 @@ def test_db_connection():
             result = rust_core.evaluate_d_for_date_and_time(date, "0930")
             
             if result:
-                print(f"  ✅ 성공: {len(result)}개 종목 선별")
+                print(f"  ✅ 성공: {len(result)}개 종목 선별 (업종별 최고 종목)")
                 for code, name, sector in result:
                     print(f"    - {name} ({code}) - {sector}")
                 success_count += 1
@@ -84,7 +84,7 @@ def test_specific_date():
             result = rust_core.evaluate_d_for_date_and_time(today, interval)
             
             if result:
-                print(f"  ✅ 성공: {len(result)}개 종목")
+                print(f"  ✅ 성공: {len(result)}개 종목 (업종별 최고 종목)")
                 for code, name, sector in result:
                     print(f"    - {name} ({code}) - {sector}")
             else:

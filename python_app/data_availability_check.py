@@ -77,7 +77,7 @@ def check_data_availability() -> Dict:
                     daily_success += 1
                     results['weekday_analysis'][weekday]['success'] += 1
                     
-                    # 연속 데이터 없음 스트릭 리셋
+                    # 연속 데이터 없음 스트릭 리셋 (업종별 최고 종목 선별 성공)
                     if current_no_data_streak > 0:
                         if current_no_data_streak > max_no_data_streak:
                             max_no_data_streak = current_no_data_streak

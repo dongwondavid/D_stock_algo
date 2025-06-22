@@ -19,7 +19,7 @@ def analyze_industry_overlaps(date_list):
             if not results:
                 continue  # D 종목이 없는 날짜는 제외
 
-            # 이제 최대 1개 종목만 반환되므로 단순히 업종 카운트
+            # 업종별 최고 종목들이 반환되므로 각 업종별로 카운트
             for _, _, industry in results:
                 industry_counter[industry] += 1
                 industry_date_map[industry].add(date)

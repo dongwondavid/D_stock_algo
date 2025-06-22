@@ -59,7 +59,7 @@ fn calculate_30min_increase_rate_internal(
         "1430" => "1400",
         "1500" => "1430",
         "1530" => "1500",
-        _ => return Err("지원하지 않는 시간대입니다.".into())
+        _ => return Err(format!("지원하지 않는 시간대입니다: {}", to_time).into())
     };
     
     let start_time = format!("{}{}", date_num, from_time);
