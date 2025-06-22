@@ -1,13 +1,13 @@
 use rusqlite::Connection;
 use log::{info, debug};
 use std::collections::HashMap;
-use crate::core::d0_logic::D0Stock;
+use crate::core::d_logic::DStock;
 
 /// 업종별로 그룹화하여 3개 이상인 업종명을 찾는 함수
-pub fn find_sectors_with_3_or_more(d0s: &[D0Stock]) -> Vec<String> {
+pub fn find_sectors_with_3_or_more(ds: &[DStock]) -> Vec<String> {
     let mut sector_count: HashMap<String, usize> = HashMap::new();
     
-    for stock in d0s {
+    for stock in ds {
         *sector_count.entry(stock.sector.clone()).or_insert(0) += 1;
     }
     
@@ -18,8 +18,8 @@ pub fn find_sectors_with_3_or_more(d0s: &[D0Stock]) -> Vec<String> {
         .collect()
 }
 
-/// 9:00~to 구간의 상승률을 계산하는 함수 (D0 조건과 일관성 유지)
-pub fn calculate_d0_period_increase_rate(
+/// 9:00~to 구간의 상승률을 계산하는 함수 (D 조건과 일관성 유지)
+pub fn calculate_d_period_increase_rate(
     conn: &Connection, 
     code: &str, 
     date_num: &str,
@@ -62,38 +62,38 @@ pub fn calculate_d0_period_increase_rate(
 /// 업종명 필터링과 상승률 기반 최종 선정을 수행하는 함수
 pub fn select_best_stock_by_increase_rate(
     conn: &Connection,
-    d0s: Vec<D0Stock>,
+    ds: Vec<DStock>,
     date_num: &str,
     to: &str
-) -> Result<Vec<D0Stock>, Box<dyn std::error::Error>> {
+) -> Result<Vec<DStock>, Box<dyn std::error::Error>> {
     // 1단계: 업종명이 3개 이상인 업종명을 찾기
-    let sectors_with_3_or_more = find_sectors_with_3_or_more(&d0s);
+    let sectors_with_3_or_more = find_sectors_with_3_or_more(&ds);
     debug!("📋 3개 이상 업종명: {:?}", sectors_with_3_or_more);
     
     if sectors_with_3_or_more.is_empty() {
-        info!("⚠️ 3개 이상인 업종명이 없습니다. 원본 d0s를 반환합니다.");
-        return Ok(d0s);
+        info!("⚠️ 3개 이상인 업종명이 없습니다.");
+        return Ok(vec![]);
     }
     
     // 2단계: 해당 업종명을 가진 종목들만 추려내기
-    let d0s_selected: Vec<D0Stock> = d0s
+    let ds_selected: Vec<DStock> = ds
         .into_iter()
         .filter(|stock| sectors_with_3_or_more.contains(&stock.sector))
         .collect();
     
-    debug!("🎯 3개 이상 업종명 필터링 결과: {}개 종목", d0s_selected.len());
+    debug!("🎯 3개 이상 업종명 필터링 결과: {}개 종목", ds_selected.len());
     
-    if d0s_selected.is_empty() {
+    if ds_selected.is_empty() {
         info!("⚠️ 필터링 후 종목이 없습니다.");
         return Ok(vec![]);
     }
     
-    // 3단계: 9:00~to 구간 상승률이 가장 높은 종목 찾기 (D0 조건과 일관성 유지)
-    let mut best_stock: Option<D0Stock> = None;
+    // 3단계: 9:00~to 구간 상승률이 가장 높은 종목 찾기 (D 조건과 일관성 유지)
+    let mut best_stock: Option<DStock> = None;
     let mut best_rate = f64::NEG_INFINITY;
     
-    for stock in &d0s_selected {
-        match calculate_d0_period_increase_rate(conn, &stock.code, date_num, to) {
+    for stock in &ds_selected {
+        match calculate_d_period_increase_rate(conn, &stock.code, date_num, to) {
             Ok(rate) => {
                 debug!("📈 {} ({}): 9:00~{} 상승률 {:.2}%", stock.name, stock.code, to, rate);
                 if rate > best_rate {

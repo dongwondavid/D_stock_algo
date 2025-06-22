@@ -8,16 +8,16 @@ def generate_date_list(days=90):
     today = datetime.today()
     return [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
 
-# D0 종목 수집 및 업종 분석
+# D 종목 수집 및 업종 분석
 def analyze_industry_overlaps(date_list):
     industry_counter = Counter()
     industry_date_map = defaultdict(set)
 
     for date in date_list:
         try:
-            results = rust_core.evaluate_d0_for_date_and_time(date, "0930")
+            results = rust_core.evaluate_d_for_date_and_time(date, "0930")
             if not results:
-                continue  # D0 종목이 없는 날짜는 제외
+                continue  # D 종목이 없는 날짜는 제외
 
             # 이제 최대 1개 종목만 반환되므로 단순히 업종 카운트
             for _, _, industry in results:

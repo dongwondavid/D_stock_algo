@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use log::{debug, info};
 
-pub fn is_d0(
+pub fn is_d(
     conn: &Connection, table: &str, from: &str, to: &str
 ) -> Result<bool, rusqlite::Error> {
     let query = format!(
@@ -28,9 +28,9 @@ pub fn is_d0(
         
         let result = rate >= 5.0 && long_bull;
         
-        // D0 조건을 만족하는 경우에만 상세 로그 출력
+        // D 조건을 만족하는 경우에만 상세 로그 출력
         if result {
-            info!("✅ {} D0 조건 만족: 시가={}, 종가={}, 상승률={:.2}%, 장대양봉={}", 
+            info!("✅ {} D 조건 만족: 시가={}, 종가={}, 상승률={:.2}%, 장대양봉={}", 
                   table, open, close, rate, long_bull);
         }
         
